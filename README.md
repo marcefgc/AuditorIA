@@ -31,7 +31,50 @@ metas) como contexto en cada respuesta.
 - Python 3.10+
 - Un bot de Telegram: créalo hablando con [@BotFather](https://t.me/BotFather)
   (`/newbot`) y copia el token.
-- Una API key de Anthropic: [platform.claude.com](https://platform.claude.com).
+- Una API key de tu proveedor de IA favorito (ver siguiente sección).
+
+## Proveedores de IA soportados
+
+El bot funciona con **cualquier proveedor de IA**, configurable por variables
+de entorno:
+
+| `AI_PROVIDER` | Qué cubre | Variables |
+|---|---|---|
+| `anthropic` | API de Anthropic (Claude) | `AI_API_KEY`, `AI_MODEL` (def.: `claude-opus-4-8`) |
+| `openai` | Cualquier API compatible con OpenAI: OpenAI, Google Gemini, Groq, DeepSeek, Mistral, OpenRouter, Ollama local... | `AI_API_KEY`, `AI_MODEL` (def.: `gpt-4o`), `AI_BASE_URL` |
+
+> ⚠️ El modelo elegido debe soportar **visión** (entrada de imágenes) para
+> poder leer las fotos de facturas.
+
+Ejemplos de configuración en `.env`:
+
+```bash
+# Claude (Anthropic)
+AI_PROVIDER=anthropic
+AI_API_KEY=sk-ant-...
+
+# OpenAI
+AI_PROVIDER=openai
+AI_API_KEY=sk-...
+AI_MODEL=gpt-4o
+
+# Google Gemini (endpoint compatible con OpenAI)
+AI_PROVIDER=openai
+AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+AI_API_KEY=AIza...
+AI_MODEL=gemini-2.0-flash
+
+# Ollama local (gratis, sin API key real)
+AI_PROVIDER=openai
+AI_BASE_URL=http://localhost:11434/v1
+AI_API_KEY=ollama
+AI_MODEL=llama3.2-vision
+```
+
+Nota: la lectura de **PDF** está garantizada con `anthropic` y con la API de
+OpenAI; otros proveedores compatibles pueden no aceptar PDFs (las imágenes
+funcionan en todos). Si tu proveedor no soporta PDF, envía el documento como
+foto.
 
 ## Instalación
 
@@ -60,17 +103,20 @@ Abre tu bot en Telegram, envía `/start` y mándale tu primera factura 🧾
 ```
 bot/
 ├── main.py     # Handlers de Telegram (comandos, fotos, chat)
-├── ai.py       # Cliente de Claude: extracción estructurada + asesor
+├── ai.py       # Capa de IA con proveedores intercambiables + asesor
 ├── prompts.py  # Prompts de sistema (tono empático, reglas de extracción)
 ├── db.py       # SQLite: transacciones, metas, historial de chat
 └── config.py   # Variables de entorno
 ```
 
-- **Modelo de IA:** `claude-opus-4-8` con *adaptive thinking* y salidas
-  estructuradas (JSON Schema) para que la extracción de documentos sea siempre
-  parseable.
+- **Capa de IA intercambiable:** `AnthropicProvider` y `OpenAICompatProvider`
+  implementan la misma interfaz (`extract_document`, `advise`); el resto del
+  bot no sabe qué proveedor hay detrás.
+- **Extracción estructurada:** con Anthropic se usan salidas estructuradas
+  nativas (JSON Schema); con proveedores compatibles con OpenAI el esquema se
+  exige por prompt y se parsea de forma tolerante, para máxima compatibilidad.
 - **Privacidad:** los datos se guardan en un SQLite local (`auditoria.db`);
-  nada se comparte con terceros más allá de la llamada a la API de IA.
+  nada se comparte con terceros más allá de la llamada a la API de IA elegida.
 
 ## Notas
 
