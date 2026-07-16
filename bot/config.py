@@ -2,9 +2,14 @@
 
 import os
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
 
-load_dotenv()
+    load_dotenv()
+except ModuleNotFoundError:
+    # Sin python-dotenv se usan las variables de entorno del sistema;
+    # _check_dependencies() avisará que falta el paquete.
+    pass
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 DB_PATH = os.environ.get("AUDITORIA_DB_PATH", "auditoria.db")
@@ -45,7 +50,30 @@ AI_API_KEY = (
 CHAT_HISTORY_LIMIT = 16
 
 
+def _check_dependencies() -> None:
+    """Falla al arrancar (y no a mitad de uso) si faltan paquetes."""
+    import importlib.util
+
+    required = {
+        "telegram": "python-telegram-bot",
+        "dotenv": "python-dotenv",
+        "PIL": "pillow",
+        "pypdfium2": "pypdfium2",
+        "anthropic" if AI_PROVIDER == "anthropic" else "openai": (
+            "anthropic" if AI_PROVIDER == "anthropic" else "openai"
+        ),
+    }
+    missing = [pkg for mod, pkg in required.items() if importlib.util.find_spec(mod) is None]
+    if missing:
+        raise SystemExit(
+            "Faltan paquetes de Python: "
+            + ", ".join(missing)
+            + ".\nInstálalos con:  pip install -r requirements.txt"
+        )
+
+
 def validate() -> None:
+    _check_dependencies()
     missing = []
     if not TELEGRAM_BOT_TOKEN:
         missing.append("TELEGRAM_BOT_TOKEN")
