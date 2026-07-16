@@ -210,6 +210,8 @@ async def handle_document_photo(update: Update, _: ContextTypes.DEFAULT_TYPE) ->
             return
         tg_file = await doc.get_file()
         mime_type = doc.mime_type or "image/jpeg"
+        if (doc.file_name or "").lower().endswith(".pdf"):
+            mime_type = "application/pdf"
 
     await message.chat.send_action(ChatAction.TYPING)
     status = await message.reply_text("🔍 Leyendo tu documento, dame unos segundos...")
@@ -311,7 +313,8 @@ def main() -> None:
         MessageHandler(
             filters.PHOTO
             | filters.Document.IMAGE
-            | filters.Document.MimeType("application/pdf"),
+            | filters.Document.MimeType("application/pdf")
+            | filters.Document.FileExtension("pdf"),
             handle_document_photo,
         )
     )

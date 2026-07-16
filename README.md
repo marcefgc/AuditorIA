@@ -71,10 +71,10 @@ AI_API_KEY=ollama
 AI_MODEL=llama3.2-vision
 ```
 
-Nota: la lectura de **PDF** está garantizada con `anthropic` y con la API de
-OpenAI; otros proveedores compatibles pueden no aceptar PDFs (las imágenes
-funcionan en todos). Si tu proveedor no soporta PDF, envía el documento como
-foto.
+Los **PDF funcionan con todos los proveedores**: con Anthropic se envían de
+forma nativa, y con los proveedores compatibles con OpenAI el bot convierte
+localmente cada página del PDF a imagen (hasta 8 páginas por documento) antes
+de enviarla al modelo.
 
 ## Instalación
 

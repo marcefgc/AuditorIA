@@ -11,10 +11,14 @@ Ambos exponen la misma interfaz: ``extract_document()`` y ``advise()``.
 """
 
 import base64
+import io
 import json
 import re
 
 from . import config, prompts
+
+# Máximo de páginas de un PDF que se envían al modelo (convertidas a imagen)
+MAX_PDF_PAGES = 8
 
 CATEGORIES = [
     "alimentacion",
@@ -98,8 +102,26 @@ class RefusalError(Exception):
     """La IA declinó procesar la solicitud."""
 
 
-class UnsupportedInputError(Exception):
-    """El proveedor configurado no soporta este tipo de archivo."""
+def _pdf_to_images(data: bytes, max_pages: int = MAX_PDF_PAGES) -> list[bytes]:
+    """Convierte las páginas de un PDF en imágenes PNG.
+
+    Permite leer PDFs con cualquier proveedor de visión, incluso los que no
+    aceptan PDFs de forma nativa. La conversión ocurre localmente.
+    """
+    import pypdfium2 as pdfium
+
+    pdf = pdfium.PdfDocument(data)
+    try:
+        images = []
+        for i in range(min(len(pdf), max_pages)):
+            page = pdf[i]
+            pil_image = page.render(scale=2.0).to_pil()
+            buf = io.BytesIO()
+            pil_image.save(buf, format="PNG")
+            images.append(buf.getvalue())
+        return images
+    finally:
+        pdf.close()
 
 
 def _parse_json_lenient(text: str) -> dict:
@@ -234,23 +256,24 @@ class OpenAICompatProvider:
             raise RefusalError("El modelo no devolvió contenido.")
         return content
 
-    async def extract_document(self, data: bytes, mime_type: str) -> dict:
+    @staticmethod
+    def _image_part(data: bytes, mime_type: str) -> dict:
         encoded = base64.standard_b64encode(data).decode("utf-8")
+        return {
+            "type": "image_url",
+            "image_url": {"url": f"data:{mime_type};base64,{encoded}"},
+        }
+
+    async def extract_document(self, data: bytes, mime_type: str) -> dict:
         if mime_type == "application/pdf":
-            # Formato de archivo de la API de OpenAI; otros proveedores
-            # compatibles pueden no soportarlo (se captura en main.py).
-            media_part = {
-                "type": "file",
-                "file": {
-                    "filename": "documento.pdf",
-                    "file_data": f"data:application/pdf;base64,{encoded}",
-                },
-            }
+            # No todos los proveedores compatibles con OpenAI aceptan PDFs:
+            # se convierte cada página a imagen para soporte universal.
+            media_parts = [
+                self._image_part(page, "image/png")
+                for page in _pdf_to_images(data)
+            ]
         else:
-            media_part = {
-                "type": "image_url",
-                "image_url": {"url": f"data:{mime_type};base64,{encoded}"},
-            }
+            media_parts = [self._image_part(data, mime_type)]
 
         system = (
             prompts.EXTRACTION_SYSTEM
@@ -264,10 +287,8 @@ class OpenAICompatProvider:
                 {"role": "system", "content": system},
                 {
                     "role": "user",
-                    "content": [
-                        media_part,
-                        {"type": "text", "text": prompts.EXTRACTION_USER_PROMPT},
-                    ],
+                    "content": media_parts
+                    + [{"type": "text", "text": prompts.EXTRACTION_USER_PROMPT}],
                 },
             ]
         )
