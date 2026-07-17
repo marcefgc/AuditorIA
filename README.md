@@ -106,7 +106,7 @@ misma base de datos del bot:
 
 ```bash
 python -m web.main
-# abre http://localhost:8000
+# abre http://localhost:8642  (puerto configurable con WEB_PORT)
 ```
 
 **Cómo entrar:**
