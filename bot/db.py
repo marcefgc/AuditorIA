@@ -1,5 +1,7 @@
-"""Persistencia SQLite de transacciones, metas e historial de chat."""
+"""Persistencia SQLite de transacciones, metas, historial y usuarios web."""
 
+import hashlib
+import secrets
 import sqlite3
 from datetime import date, datetime
 
@@ -27,6 +29,13 @@ CREATE TABLE IF NOT EXISTS goals (
     description TEXT NOT NULL,
     created_at TEXT NOT NULL,
     done INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS web_users (
+    user_id INTEGER PRIMARY KEY,
+    display_name TEXT,
+    password_hash TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS chat_history (
@@ -126,6 +135,76 @@ def month_summary(user_id: int, year: int, month: int) -> dict:
         else:
             cur["ingresos"] += r["total"]
     return summary
+
+
+def available_months(user_id: int) -> list[str]:
+    """Meses (YYYY-MM) con transacciones registradas, del más reciente al más viejo."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT substr(tx_date, 1, 7) AS ym FROM transactions"
+            " WHERE user_id = ? AND tx_date IS NOT NULL ORDER BY ym DESC",
+            (user_id,),
+        ).fetchall()
+    return [r["ym"] for r in rows]
+
+
+def month_transactions(
+    user_id: int, year: int, month: int, limit: int = 200
+) -> list[sqlite3.Row]:
+    prefix = f"{year:04d}-{month:02d}"
+    with _connect() as conn:
+        return conn.execute(
+            "SELECT * FROM transactions WHERE user_id = ? AND tx_date LIKE ?"
+            " ORDER BY tx_date DESC, id DESC LIMIT ?",
+            (user_id, prefix + "%", limit),
+        ).fetchall()
+
+
+# --------------------------------------------------------------- usuarios web
+
+_PBKDF2_ITERATIONS = 200_000
+
+
+def set_web_password(
+    user_id: int, password: str, display_name: str | None = None
+) -> None:
+    """Crea o actualiza la contraseña de acceso web del usuario."""
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), bytes.fromhex(salt), _PBKDF2_ITERATIONS
+    ).hex()
+    stored = f"pbkdf2_sha256${_PBKDF2_ITERATIONS}${salt}${digest}"
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO web_users (user_id, display_name, password_hash, updated_at)"
+            " VALUES (?, ?, ?, ?)"
+            " ON CONFLICT(user_id) DO UPDATE SET"
+            "  password_hash = excluded.password_hash,"
+            "  display_name = COALESCE(excluded.display_name, web_users.display_name),"
+            "  updated_at = excluded.updated_at",
+            (user_id, display_name, stored, _now()),
+        )
+
+
+def get_web_user(user_id: int) -> sqlite3.Row | None:
+    with _connect() as conn:
+        return conn.execute(
+            "SELECT * FROM web_users WHERE user_id = ?", (user_id,)
+        ).fetchone()
+
+
+def verify_web_password(user_id: int, password: str) -> bool:
+    row = get_web_user(user_id)
+    if not row:
+        return False
+    try:
+        _algo, iterations, salt, digest = row["password_hash"].split("$")
+        calc = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), bytes.fromhex(salt), int(iterations)
+        ).hex()
+    except (ValueError, TypeError):
+        return False
+    return secrets.compare_digest(calc, digest)
 
 
 # ---------------------------------------------------------------------- metas

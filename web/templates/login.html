@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Entrar · AuditorIA{% endblock %}
+{% block content %}
+<main class="login-wrap">
+  <div class="login-card">
+    <div class="brand">
+      <div class="brand-icon">🤖</div>
+      <h1>AuditorIA</h1>
+      <p class="muted">Tus finanzas, organizadas por tu bot</p>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="alert" role="alert">{{ messages[0] }}</div>
+      {% endif %}
+    {% endwith %}
+
+    <form method="post" autocomplete="on">
+      <label for="user_id">Usuario (tu ID de Telegram)</label>
+      <input id="user_id" name="user_id" type="text" inputmode="numeric"
+             autocomplete="username" placeholder="Ej: 123456789" required>
+
+      <label for="password">Contraseña</label>
+      <input id="password" name="password" type="password"
+             autocomplete="current-password" placeholder="La definida con /clave" required>
+
+      <button type="submit">Entrar</button>
+    </form>
+
+    <p class="muted small">
+      ¿Sin cuenta? Escríbele <strong>/clave &lt;contraseña&gt;</strong> al bot en
+      Telegram para crearla, y <strong>/web</strong> para ver tu usuario.
+    </p>
+  </div>
+</main>
+{% endblock %}

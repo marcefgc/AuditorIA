@@ -98,6 +98,33 @@ python -m bot.main
 
 Abre tu bot en Telegram, envía `/start` y mándale tu primera factura 🧾
 
+## Interfaz web 📱
+
+Panel web *mobile-first* para visualizar tus datos: totales del mes, gastos por
+categoría, metas y movimientos. Se ejecuta como proceso aparte y comparte la
+misma base de datos del bot:
+
+```bash
+python -m web.main
+# abre http://localhost:8000
+```
+
+**Cómo entrar:**
+
+1. En Telegram, envíale al bot `/clave <contraseña>` (mín. 6 caracteres). Eso
+   crea —o actualiza— tu usuario web. El bot borra tu mensaje por seguridad.
+2. El bot te responde con tu **usuario** (tu ID de Telegram) y la URL del panel.
+   ¿Dudas después? `/web` te lo recuerda.
+3. Entra en el panel con ese usuario y tu contraseña.
+
+Cada sesión ve **únicamente los datos del usuario logueado**. Las contraseñas
+se guardan con hash PBKDF2 y la sesión dura 30 días (cookie firmada).
+
+Variables útiles en `.env`: `WEB_SECRET_KEY` (recomendada, para que las
+sesiones sobrevivan reinicios), `WEB_URL` (la URL pública que el bot muestra),
+`WEB_HOST` y `WEB_PORT`. Para exponerlo en internet usa un proxy con HTTPS
+(Caddy, nginx, Cloudflare Tunnel...).
+
 ## Arquitectura
 
 ```
@@ -105,8 +132,13 @@ bot/
 ├── main.py     # Handlers de Telegram (comandos, fotos, chat)
 ├── ai.py       # Capa de IA con proveedores intercambiables + asesor
 ├── prompts.py  # Prompts de sistema (tono empático, reglas de extracción)
-├── db.py       # SQLite: transacciones, metas, historial de chat
+├── db.py       # SQLite: transacciones, metas, historial, usuarios web
 └── config.py   # Variables de entorno
+web/
+├── main.py     # Punto de entrada del servidor web (python -m web.main)
+├── app.py      # Rutas Flask: login, logout, dashboard
+├── templates/  # HTML (login, panel)
+└── static/     # CSS mobile-first con modo claro/oscuro
 ```
 
 - **Capa de IA intercambiable:** `AnthropicProvider` y `OpenAICompatProvider`

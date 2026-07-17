@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Panel · AuditorIA{% endblock %}
+{% block content %}
+<header class="topbar">
+  <div class="topbar-inner">
+    <span class="logo">🤖 AuditorIA</span>
+    <a class="logout" href="{{ url_for('logout') }}">Salir</a>
+  </div>
+</header>
+
+<main class="container">
+  <section class="greeting">
+    <h1>Hola, {{ display_name }}</h1>
+    <form method="get" class="month-form">
+      <label class="visually-hidden" for="mes">Mes</label>
+      <select id="mes" name="mes" onchange="this.form.submit()">
+        {% for m in months %}
+          <option value="{{ m.value }}" {% if m.value == selected %}selected{% endif %}>
+            {{ m.label }}
+          </option>
+        {% else %}
+          <option value="{{ selected }}" selected>{{ selected_label }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </section>
+
+  {% if not currencies %}
+    <section class="card empty">
+      <p>📭 Sin movimientos en {{ selected_label }}.</p>
+      <p class="muted">Envíale al bot una foto de una factura o un extracto
+      para empezar a registrar.</p>
+    </section>
+  {% endif %}
+
+  {% for cur in currencies %}
+  <section class="currency-block">
+    {% if currencies|length > 1 %}<h2 class="currency-title">{{ cur.code }}</h2>{% endif %}
+
+    <div class="stats">
+      <div class="stat card">
+        <span class="stat-label">Gastos</span>
+        <span class="stat-value">{{ cur.expenses }}</span>
+        <span class="stat-unit">{{ cur.code }}</span>
+      </div>
+      <div class="stat card">
+        <span class="stat-label">Ingresos</span>
+        <span class="stat-value">{{ cur.income }}</span>
+        <span class="stat-unit">{{ cur.code }}</span>
+      </div>
+      <div class="stat card">
+        <span class="stat-label">Balance</span>
+        <span class="stat-value">{{ cur.balance }}</span>
+        <span class="stat-unit">{{ cur.code }}</span>
+      </div>
+    </div>
+
+    {% if cur.categories %}
+    <div class="card">
+      <h3>Gastos por categoría</h3>
+      <ul class="bars">
+        {% for cat in cur.categories %}
+        <li class="bar-row">
+          <div class="bar-head">
+            <span class="bar-name">{{ cat.emoji }} {{ cat.name }}</span>
+            <span class="bar-value">{{ "%.2f"|format(cat.amount) }}
+              <span class="bar-share">{{ cat.share }}%</span></span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: {{ cat.pct }}%"></div>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </section>
+  {% endfor %}
+
+  {% if goals %}
+  <section class="card">
+    <h3>🎯 Tus metas</h3>
+    <ul class="goals">
+      {% for g in goals %}
+      <li>{{ g['description'] }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if transactions %}
+  <section class="card">
+    <h3>Movimientos de {{ selected_label }}</h3>
+    <ul class="tx-list">
+      {% for tx in transactions %}
+      <li class="tx">
+        <span class="tx-emoji">{{ category_emoji.get(tx['category'], '📦') }}</span>
+        <span class="tx-main">
+          <span class="tx-desc">{{ tx['description'] }}</span>
+          <span class="tx-meta muted">{{ tx['tx_date'] }} · {{ tx['category'] }}</span>
+        </span>
+        <span class="tx-amount {{ 'income' if tx['tx_type'] == 'ingreso' }}">
+          {{ '+' if tx['tx_type'] == 'ingreso' else '−' }}{{ "%.2f"|format(tx['amount']) }}
+          <span class="tx-cur muted">{{ tx['currency'] }}</span>
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <footer class="foot muted small">
+    Registra más movimientos enviándole fotos a tu bot en Telegram 📸
+  </footer>
+</main>
+{% endblock %}

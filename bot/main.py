@@ -43,6 +43,8 @@ WELCOME = (
     "/meta <texto> — define un objetivo (ej: /meta ahorrar 500 USD para diciembre)\n"
     "/metas — ver tus objetivos\n"
     "/borrar_ultimo — elimina la última transacción\n"
+    "/clave <contraseña> — crea o cambia tu acceso a la web 📱\n"
+    "/web — datos de acceso a tu panel web\n"
     "/ayuda — ver esta ayuda de nuevo\n\n"
     "¿Empezamos? Mándame tu primera factura 🧾"
 )
@@ -190,6 +192,59 @@ async def cmd_borrar_ultimo(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("No hay transacciones para eliminar.")
 
 
+async def cmd_clave(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Crea o actualiza la contraseña del panel web."""
+    user = update.effective_user
+    password = " ".join(context.args).strip()
+
+    # Borra el mensaje que contiene la contraseña, por seguridad
+    try:
+        await update.message.delete()
+    except Exception:
+        pass
+
+    if not password:
+        await update.effective_chat.send_message(
+            "Uso: /clave <contraseña>\n\n"
+            "Crea (o cambia) tu contraseña para entrar al panel web. "
+            "Mínimo 6 caracteres. Ejemplo:\n/clave MiClaveSegura123"
+        )
+        return
+    if len(password) < 6:
+        await update.effective_chat.send_message(
+            "La contraseña debe tener al menos 6 caracteres 🔒 Intenta de nuevo."
+        )
+        return
+
+    is_new = db.get_web_user(user.id) is None
+    db.set_web_password(user.id, password, user.first_name)
+    action = "creado" if is_new else "actualizado"
+    await update.effective_chat.send_message(
+        f"🔐 ¡Acceso web {action}! (borré tu mensaje por seguridad)\n\n"
+        f"🌐 Panel: {config.WEB_URL}\n"
+        f"👤 Usuario: {user.id}\n"
+        "🔑 Contraseña: la que acabas de definir\n\n"
+        "Puedes cambiarla cuando quieras con /clave <nueva contraseña>."
+    )
+
+
+async def cmd_web(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    """Muestra los datos de acceso al panel web."""
+    user = update.effective_user
+    if db.get_web_user(user.id) is None:
+        await update.message.reply_text(
+            "Aún no tienes acceso web. Créalo con:\n/clave <contraseña>\n\n"
+            "Luego entra con tu número de usuario y esa contraseña."
+        )
+        return
+    await update.message.reply_text(
+        f"🌐 Tu panel web: {config.WEB_URL}\n"
+        f"👤 Usuario: {user.id}\n"
+        "🔑 Contraseña: la definida con /clave\n\n"
+        "¿La olvidaste? Cámbiala con /clave <nueva contraseña>."
+    )
+
+
 # ----------------------------------------------------------------- documentos
 
 MAX_FILE_BYTES = 20 * 1024 * 1024  # límite de descarga de la Bot API
@@ -309,6 +364,8 @@ def main() -> None:
     app.add_handler(CommandHandler("metas", cmd_metas))
     app.add_handler(CommandHandler("meta_cumplida", cmd_meta_cumplida))
     app.add_handler(CommandHandler("borrar_ultimo", cmd_borrar_ultimo))
+    app.add_handler(CommandHandler("clave", cmd_clave))
+    app.add_handler(CommandHandler("web", cmd_web))
     app.add_handler(
         MessageHandler(
             filters.PHOTO
