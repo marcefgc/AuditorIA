@@ -3,14 +3,19 @@
 {% block content %}
 <header class="topbar">
   <div class="topbar-inner">
-    <span class="logo">🤖 AuditorIA</span>
-    <a class="logout" href="{{ url_for('logout') }}">Salir</a>
+    <span class="brand-lockup">
+      <span class="brand-mark" aria-hidden="true">A</span>
+      <span class="wordmark">Auditor<span class="accent">IA</span></span>
+    </span>
+    <a class="logout" href="{{ url_for('logout') }}">
+      <span class="material-symbols-outlined">logout</span>Salir
+    </a>
   </div>
 </header>
 
-<main class="container">
+<main class="container" id="top">
   <section class="greeting">
-    <h1>Hola, {{ display_name }}</h1>
+    <h1>Hola{% if display_name %}, {{ display_name }}{% endif %}</h1>
     <form method="get" class="month-form">
       <label class="visually-hidden" for="mes">Mes</label>
       <select id="mes" name="mes" onchange="this.form.submit()">
@@ -25,30 +30,39 @@
     </form>
   </section>
 
-  {% if not currencies %}
-    <section class="card empty">
-      <p>📭 Sin movimientos en {{ selected_label }}.</p>
-      <p class="muted">Envíale al bot una foto de una factura o un extracto
-      para empezar a registrar.</p>
-    </section>
+  {% if currencies %}
+  <section class="hero">
+    <span class="hero-label">Balance de {{ selected_label }}</span>
+    <span class="hero-value">{{ currencies[0].balance|replace('+', '') }}<span class="cur">{{ currencies[0].code }}</span></span>
+  </section>
+  {% else %}
+  <section class="card empty">
+    <span class="empty-ico"><span class="material-symbols-outlined">inbox</span></span>
+    <p>Sin movimientos en {{ selected_label }}.</p>
+    <p class="muted small">Envíale al bot una foto de una factura o un extracto
+    para empezar a registrar.</p>
+  </section>
   {% endif %}
 
   {% for cur in currencies %}
   <section class="currency-block">
-    {% if currencies|length > 1 %}<h2 class="currency-title">{{ cur.code }}</h2>{% endif %}
+    {% if currencies|length > 1 %}<h2 class="section-title">{{ cur.code }}</h2>{% endif %}
 
     <div class="stats">
-      <div class="stat card">
+      <div class="stat card stat--exp">
+        <span class="stat-icon"><span class="material-symbols-outlined">arrow_downward</span></span>
         <span class="stat-label">Gastos</span>
         <span class="stat-value">{{ cur.expenses }}</span>
         <span class="stat-unit">{{ cur.code }}</span>
       </div>
-      <div class="stat card">
+      <div class="stat card stat--inc">
+        <span class="stat-icon"><span class="material-symbols-outlined">arrow_upward</span></span>
         <span class="stat-label">Ingresos</span>
         <span class="stat-value">{{ cur.income }}</span>
         <span class="stat-unit">{{ cur.code }}</span>
       </div>
-      <div class="stat card">
+      <div class="stat card stat--bal">
+        <span class="stat-icon"><span class="material-symbols-outlined">account_balance</span></span>
         <span class="stat-label">Balance</span>
         <span class="stat-value">{{ cur.balance }}</span>
         <span class="stat-unit">{{ cur.code }}</span>
@@ -56,18 +70,24 @@
     </div>
 
     {% if cur.categories %}
-    <div class="card">
-      <h3>Gastos por categoría</h3>
+    <div class="card" id="categorias">
+      <div class="card-head">
+        <h3>Gastos por categoría</h3>
+        <span class="pill">{{ cur.code }}</span>
+      </div>
       <ul class="bars">
         {% for cat in cur.categories %}
         <li class="bar-row">
-          <div class="bar-head">
-            <span class="bar-name">{{ cat.emoji }} {{ cat.name }}</span>
-            <span class="bar-value">{{ "%.2f"|format(cat.amount) }}
-              <span class="bar-share">{{ cat.share }}%</span></span>
-          </div>
-          <div class="bar-track">
-            <div class="bar-fill" style="width: {{ cat.pct }}%"></div>
+          <span class="bar-ico"><span class="material-symbols-outlined">{{ cat.icon }}</span></span>
+          <div class="bar-body">
+            <div class="bar-head">
+              <span class="bar-name">{{ cat.name }}</span>
+              <span class="bar-value">{{ cat.amount }}
+                <span class="bar-share">{{ cat.share }}%</span></span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" style="width: {{ cat.pct }}%"></div>
+            </div>
           </div>
         </li>
         {% endfor %}
@@ -79,29 +99,36 @@
 
   {% if goals %}
   <section class="card">
-    <h3>🎯 Tus metas</h3>
+    <div class="card-head">
+      <h3>Tus metas</h3>
+    </div>
     <ul class="goals">
       {% for g in goals %}
-      <li>{{ g['description'] }}</li>
+      <li><span class="material-symbols-outlined">flag</span>{{ g['description'] }}</li>
       {% endfor %}
     </ul>
   </section>
   {% endif %}
 
   {% if transactions %}
-  <section class="card">
-    <h3>Movimientos de {{ selected_label }}</h3>
+  <section class="card" id="movimientos">
+    <div class="card-head">
+      <h3>Movimientos</h3>
+      <span class="pill">{{ selected_label }}</span>
+    </div>
     <ul class="tx-list">
       {% for tx in transactions %}
       <li class="tx">
-        <span class="tx-emoji">{{ category_emoji.get(tx['category'], '📦') }}</span>
-        <span class="tx-main">
-          <span class="tx-desc">{{ tx['description'] }}</span>
-          <span class="tx-meta muted">{{ tx['tx_date'] }} · {{ tx['category'] }}</span>
+        <span class="tx-ico{{ ' tx-ico--inc' if tx.income }}">
+          <span class="material-symbols-outlined">{{ tx.icon }}</span>
         </span>
-        <span class="tx-amount {{ 'income' if tx['tx_type'] == 'ingreso' }}">
-          {{ '+' if tx['tx_type'] == 'ingreso' else '−' }}{{ "%.2f"|format(tx['amount']) }}
-          <span class="tx-cur muted">{{ tx['currency'] }}</span>
+        <span class="tx-main">
+          <span class="tx-desc">{{ tx.description }}</span>
+          <span class="tx-meta muted">{{ tx.date }} · {{ tx.category }}</span>
+        </span>
+        <span class="tx-amount {{ 'income' if tx.income }}">
+          {{ '+' if tx.income else '−' }}{{ tx.amount }}
+          <span class="tx-cur">{{ tx.currency }}</span>
         </span>
       </li>
       {% endfor %}
@@ -109,8 +136,17 @@
   </section>
   {% endif %}
 
-  <footer class="foot muted small">
-    Registra más movimientos enviándole fotos a tu bot en Telegram 📸
+  <footer class="foot small">
+    Registra más movimientos enviando tus comprobantes al bot en Telegram.
   </footer>
 </main>
+
+<nav class="bottomnav">
+  <ul>
+    <li><a class="active" href="#top"><span class="material-symbols-outlined fill">home</span>Inicio</a></li>
+    <li><a href="#categorias"><span class="material-symbols-outlined">donut_small</span>Análisis</a></li>
+    <li><a href="#movimientos"><span class="material-symbols-outlined">receipt_long</span>Movimientos</a></li>
+    <li><a href="{{ url_for('logout') }}"><span class="material-symbols-outlined">logout</span>Salir</a></li>
+  </ul>
+</nav>
 {% endblock %}

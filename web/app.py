@@ -26,23 +26,32 @@ MONTHS_ES = [
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ]
 
-CATEGORY_EMOJI = {
-    "alimentacion": "🛒",
-    "restaurantes": "🍽️",
-    "transporte": "🚌",
-    "vivienda": "🏠",
-    "servicios": "💡",
-    "suscripciones": "📺",
-    "salud": "🩺",
-    "educacion": "📚",
-    "entretenimiento": "🎮",
-    "ropa": "👕",
-    "viajes": "✈️",
-    "deudas": "💳",
-    "ahorro": "🐖",
-    "transferencias": "🔁",
-    "otros": "📦",
+# Iconos Material Symbols por categoría (ver templates/base.html)
+CATEGORY_ICON = {
+    "alimentacion": "shopping_cart",
+    "restaurantes": "restaurant",
+    "transporte": "directions_bus",
+    "vivienda": "home",
+    "servicios": "bolt",
+    "suscripciones": "subscriptions",
+    "salud": "medical_services",
+    "educacion": "school",
+    "entretenimiento": "sports_esports",
+    "ropa": "checkroom",
+    "viajes": "flight",
+    "deudas": "credit_card",
+    "ahorro": "savings",
+    "transferencias": "sync_alt",
+    "otros": "category",
 }
+
+# Monedas sin subunidad en uso: los importes se muestran sin decimales.
+ZERO_DECIMAL_CURRENCIES = {"PYG", "CLP", "JPY", "KRW", "VND"}
+
+MONTHS_ES_SHORT = [
+    "ene", "feb", "mar", "abr", "may", "jun",
+    "jul", "ago", "sep", "oct", "nov", "dic",
+]
 
 _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
@@ -52,12 +61,34 @@ def _month_label(ym: str) -> str:
     return f"{MONTHS_ES[int(month) - 1]} {year}"
 
 
-def _fmt_tile(value: float, signed: bool = False) -> str:
+def _decimals(currency: str) -> int:
+    return 0 if currency.upper() in ZERO_DECIMAL_CURRENCIES else 2
+
+
+def _fmt_amount(value: float, currency: str, signed: bool = False) -> str:
+    """Importe con separadores es-PY: 1.234.567,89 (sin decimales en PYG)."""
+    spec = f"{'+' if signed else ''},.{_decimals(currency)}f"
+    s = format(value, spec)
+    return s.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+
+
+def _fmt_tile(value: float, currency: str, signed: bool = False) -> str:
     """Importe compacto para las tarjetas: sin decimales cuando es grande."""
-    spec = "+,.0f" if signed else ",.0f"
-    if abs(value) < 1000:
-        spec = "+,.2f" if signed else ",.2f"
-    return format(value, spec)
+    nd = _decimals(currency)
+    if nd and abs(value) >= 1000:
+        nd = 0
+    spec = f"{'+' if signed else ''},.{nd}f"
+    s = format(value, spec)
+    return s.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+
+
+def _fmt_tx_date(tx_date: str) -> str:
+    """'2026-07-16' -> '16 jul'."""
+    try:
+        _, month, day = tx_date[:10].split("-")
+        return f"{int(day)} {MONTHS_ES_SHORT[int(month) - 1]}"
+    except (ValueError, IndexError):
+        return tx_date
 
 
 def create_app() -> Flask:
@@ -130,14 +161,14 @@ def create_app() -> Flask:
             currencies.append(
                 {
                     "code": cur,
-                    "expenses": _fmt_tile(data["total_gastos"]),
-                    "income": _fmt_tile(data["ingresos"]),
-                    "balance": _fmt_tile(balance, signed=True),
+                    "expenses": _fmt_tile(data["total_gastos"], cur),
+                    "income": _fmt_tile(data["ingresos"], cur),
+                    "balance": _fmt_tile(balance, cur, signed=True),
                     "categories": [
                         {
                             "name": name,
-                            "emoji": CATEGORY_EMOJI.get(name, "📦"),
-                            "amount": amount,
+                            "icon": CATEGORY_ICON.get(name, "category"),
+                            "amount": _fmt_amount(amount, cur),
                             "pct": round(amount / max_amount * 100),
                             "share": (
                                 round(amount / data["total_gastos"] * 100)
@@ -150,16 +181,35 @@ def create_app() -> Flask:
                 }
             )
 
+        # Movimientos con importe, fecha e icono ya formateados
+        tx_view = []
+        for tx in transactions:
+            income = tx["tx_type"] == "ingreso"
+            tx_view.append(
+                {
+                    "description": tx["description"],
+                    "category": tx["category"],
+                    "date": _fmt_tx_date(tx["tx_date"]),
+                    "income": income,
+                    "amount": _fmt_amount(tx["amount"], tx["currency"]),
+                    "currency": tx["currency"],
+                    "icon": (
+                        "payments"
+                        if income
+                        else CATEGORY_ICON.get(tx["category"], "category")
+                    ),
+                }
+            )
+
         return render_template(
             "dashboard.html",
-            display_name=(web_user["display_name"] if web_user else None) or "👋",
+            display_name=(web_user["display_name"] if web_user else None) or "",
             months=[{"value": m, "label": _month_label(m)} for m in months],
             selected=selected,
             selected_label=_month_label(selected),
             currencies=currencies,
-            transactions=transactions,
+            transactions=tx_view,
             goals=goals,
-            category_emoji=CATEGORY_EMOJI,
         )
 
     return app
