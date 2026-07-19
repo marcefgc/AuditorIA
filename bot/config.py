@@ -55,10 +55,10 @@ CHAT_HISTORY_LIMIT = 16
 WEB_SECRET_KEY = os.environ.get("WEB_SECRET_KEY", "")
 
 # URL pública de la interfaz web (la que el bot muestra en /web).
-WEB_URL = os.environ.get("WEB_URL", "http://localhost:8000")
+WEB_URL = os.environ.get("WEB_URL", "http://localhost:8642")
 
 WEB_HOST = os.environ.get("WEB_HOST", "0.0.0.0")
-WEB_PORT = int(os.environ.get("WEB_PORT", "8000"))
+WEB_PORT = int(os.environ.get("WEB_PORT", "8642"))
 
 
 def _check_dependencies() -> None:

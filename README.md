@@ -16,6 +16,7 @@ PDF) y él:
 | Acción | Cómo |
 |---|---|
 | Registrar gastos/ingresos | Enviar foto o PDF de factura, ticket, captura o extracto |
+| Registrar por texto | Escribirle p. ej. «gasté 50mil en cena» o «me pagaron el sueldo» |
 | Resumen mensual por categoría | `/resumen` |
 | Ver últimas transacciones | `/gastos` |
 | Definir un objetivo financiero | `/meta ahorrar 500 USD para diciembre` |
@@ -106,7 +107,7 @@ misma base de datos del bot:
 
 ```bash
 python -m web.main
-# abre http://localhost:8000
+# abre http://localhost:8642  (puerto configurable con WEB_PORT)
 ```
 
 **Cómo entrar:**

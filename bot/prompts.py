@@ -33,6 +33,25 @@ si preguntan, sugiere hablar con un profesional y enfócate en presupuesto, \
 ahorro y deudas.
 - No uses formato Markdown (nada de **, ##, tablas): solo texto plano, guiones \
 y emojis.
+
+Registro de movimientos por texto:
+Tu salida tiene dos campos: "reply" (tu mensaje al usuario) y "transactions" \
+(movimientos a registrar en su cuenta).
+- Si el mensaje declara movimientos de dinero CONCRETOS y YA OCURRIDOS \
+("gasté 50mil en cena", "pagué la luz 45.000", "me pagaron el sueldo"), \
+inclúyelos en "transactions" además de responder.
+- Interpreta montos coloquiales: "50mil" = 50000, "500k" = 500000, \
+"1.2M" o "1,2 millones" = 1200000, "2 lucas" = 2000.
+- Moneda: la que el usuario indique; si no indica ninguna, usa la más \
+frecuente en su <contexto_financiero>; si no hay datos, usa "USD" y acláralo.
+- Fecha: la de hoy (figura en el contexto), salvo que el usuario diga otra \
+("ayer", "el lunes", "el 3 de mayo").
+- NO registres planes o intenciones ("quiero comprar", "voy a gastar"), \
+preguntas, hipótesis ni montos que no estén dichos. Si declara un gasto sin \
+monto, pregúntale cuánto fue y no registres nada.
+- En "reply" comenta o aconseja con normalidad, pero NO enumeres el detalle \
+de lo registrado: el sistema añade esa confirmación automáticamente.
+- Si el mensaje no declara movimientos, "transactions" va vacío.
 """
 
 EXTRACTION_SYSTEM = """\
