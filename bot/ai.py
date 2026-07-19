@@ -38,6 +38,20 @@ CATEGORIES = [
     "otros",
 ]
 
+TX_ITEM_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "date": {"type": ["string", "null"], "description": "YYYY-MM-DD"},
+        "description": {"type": "string"},
+        "amount": {"type": "number", "description": "Monto positivo"},
+        "currency": {"type": "string", "description": "Código ISO 4217"},
+        "type": {"type": "string", "enum": ["gasto", "ingreso"]},
+        "category": {"type": "string", "enum": CATEGORIES},
+    },
+    "required": ["date", "description", "amount", "currency", "type", "category"],
+    "additionalProperties": False,
+}
+
 EXTRACTION_SCHEMA = {
     "type": "object",
     "properties": {
@@ -62,29 +76,7 @@ EXTRACTION_SCHEMA = {
             "type": ["string", "null"],
             "description": "Comercio, banco o emisor del documento",
         },
-        "transactions": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "date": {"type": ["string", "null"], "description": "YYYY-MM-DD"},
-                    "description": {"type": "string"},
-                    "amount": {"type": "number", "description": "Monto positivo"},
-                    "currency": {"type": "string", "description": "Código ISO 4217"},
-                    "type": {"type": "string", "enum": ["gasto", "ingreso"]},
-                    "category": {"type": "string", "enum": CATEGORIES},
-                },
-                "required": [
-                    "date",
-                    "description",
-                    "amount",
-                    "currency",
-                    "type",
-                    "category",
-                ],
-                "additionalProperties": False,
-            },
-        },
+        "transactions": {"type": "array", "items": TX_ITEM_SCHEMA},
         "notes": {"type": ["string", "null"]},
     },
     "required": [
@@ -94,6 +86,21 @@ EXTRACTION_SCHEMA = {
         "transactions",
         "notes",
     ],
+    "additionalProperties": False,
+}
+
+# Respuesta del chat asesor: el mensaje para el usuario + los movimientos que
+# declaró por texto ("gasté 50mil en cena") para registrarlos en su cuenta.
+CHAT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "reply": {
+            "type": "string",
+            "description": "Respuesta al usuario, en texto plano",
+        },
+        "transactions": {"type": "array", "items": TX_ITEM_SCHEMA},
+    },
+    "required": ["reply", "transactions"],
     "additionalProperties": False,
 }
 
@@ -203,9 +210,9 @@ class AnthropicProvider:
         )
         return json.loads(self._first_text(response))
 
-    async def advise(
+    async def chat(
         self, history: list[dict], user_message: str, snapshot: str
-    ) -> str:
+    ) -> dict:
         content = (
             f"<contexto_financiero>\n{snapshot}\n</contexto_financiero>\n\n"
             f"{user_message}"
@@ -221,9 +228,10 @@ class AnthropicProvider:
                     "cache_control": {"type": "ephemeral"},
                 }
             ],
+            output_config={"format": {"type": "json_schema", "schema": CHAT_SCHEMA}},
             messages=history + [{"role": "user", "content": content}],
         )
-        return self._first_text(response)
+        return json.loads(self._first_text(response))
 
 
 # ======================================================= OpenAI-compatible ===
@@ -294,18 +302,35 @@ class OpenAICompatProvider:
         )
         return _parse_json_lenient(text)
 
-    async def advise(
+    async def chat(
         self, history: list[dict], user_message: str, snapshot: str
-    ) -> str:
+    ) -> dict:
         content = (
             f"<contexto_financiero>\n{snapshot}\n</contexto_financiero>\n\n"
             f"{user_message}"
         )
-        return await self._chat(
-            [{"role": "system", "content": prompts.ADVISOR_SYSTEM}]
+        system = (
+            prompts.ADVISOR_SYSTEM
+            + "\n\nResponde ÚNICAMENTE con un objeto JSON válido (sin texto"
+            " adicional ni cercos de código) que cumpla exactamente este"
+            " esquema JSON Schema:\n"
+            + json.dumps(CHAT_SCHEMA, ensure_ascii=False)
+        )
+        text = await self._chat(
+            [{"role": "system", "content": system}]
             + history
             + [{"role": "user", "content": content}]
         )
+        try:
+            data = _parse_json_lenient(text)
+        except ValueError:
+            # El modelo no respetó el JSON: usamos su texto como respuesta
+            return {"reply": text, "transactions": []}
+        if not isinstance(data.get("reply"), str) or not data["reply"].strip():
+            data["reply"] = text
+        if not isinstance(data.get("transactions"), list):
+            data["transactions"] = []
+        return data
 
 
 # ================================================================= fachada ===
@@ -330,6 +355,10 @@ async def extract_document(data: bytes, mime_type: str) -> dict:
     return await _get_provider().extract_document(data, mime_type)
 
 
-async def advise(history: list[dict], user_message: str, snapshot: str) -> str:
-    """Responde como asesor financiero usando el historial y los datos del usuario."""
-    return await _get_provider().advise(history, user_message, snapshot)
+async def chat(history: list[dict], user_message: str, snapshot: str) -> dict:
+    """Responde como asesor y detecta movimientos declarados por texto.
+
+    Devuelve {"reply": str, "transactions": [...]}: los movimientos concretos
+    que el usuario declaró (p. ej. "gasté 50mil en cena") para registrarlos.
+    """
+    return await _get_provider().chat(history, user_message, snapshot)

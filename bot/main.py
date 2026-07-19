@@ -323,6 +323,20 @@ async def handle_document_photo(update: Update, _: ContextTypes.DEFAULT_TYPE) ->
 
 # ----------------------------------------------------------------- chat libre
 
+def _valid_transactions(raw: list) -> list[dict]:
+    """Filtra las transacciones del chat: monto numérico positivo obligatorio."""
+    valid = []
+    for tx in raw or []:
+        if not isinstance(tx, dict):
+            continue
+        try:
+            if float(tx.get("amount") or 0) > 0:
+                valid.append(tx)
+        except (TypeError, ValueError):
+            continue
+    return valid
+
+
 async def handle_text(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     text = update.message.text
@@ -330,7 +344,7 @@ async def handle_text(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.chat.send_action(ChatAction.TYPING)
     history = db.chat_history(user_id, config.CHAT_HISTORY_LIMIT)
     try:
-        reply = await ai.advise(history, text, _snapshot(user_id))
+        result = await ai.chat(history, text, _snapshot(user_id))
     except ai.RefusalError:
         await update.message.reply_text(
             "No puedo ayudarte con eso, pero con gusto hablamos de tus "
@@ -343,6 +357,26 @@ async def handle_text(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             "Tuve un problema para responder 😓 Intenta de nuevo en un momento."
         )
         return
+
+    reply = (result.get("reply") or "").strip() or "¿Me lo repites? 🙏"
+
+    # Movimientos declarados por texto ("gasté 50mil en cena") -> a la base,
+    # así aparecen también en /resumen y en el dashboard web.
+    txs = _valid_transactions(result.get("transactions"))
+    if txs:
+        db.add_transactions(
+            user_id,
+            {"document_type": "chat", "merchant": None, "transactions": txs},
+        )
+        lines = [reply, "", "✍️ Registrado:"]
+        for tx in txs:
+            sign = "−" if tx.get("type") != "ingreso" else "+"
+            lines.append(
+                f"• {tx.get('description', 'movimiento')}: "
+                f"{sign}{_fmt_amount(float(tx['amount']), (tx.get('currency') or 'USD').upper())}"
+                f" ({tx.get('category', 'otros')})"
+            )
+        reply = "\n".join(lines)
 
     db.append_chat(user_id, "user", text)
     db.append_chat(user_id, "assistant", reply)

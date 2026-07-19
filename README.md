@@ -16,6 +16,7 @@ PDF) y él:
 | Acción | Cómo |
 |---|---|
 | Registrar gastos/ingresos | Enviar foto o PDF de factura, ticket, captura o extracto |
+| Registrar por texto | Escribirle p. ej. «gasté 50mil en cena» o «me pagaron el sueldo» |
 | Resumen mensual por categoría | `/resumen` |
 | Ver últimas transacciones | `/gastos` |
 | Definir un objetivo financiero | `/meta ahorrar 500 USD para diciembre` |
