@@ -9,9 +9,11 @@ import re
 import secrets
 from datetime import date, timedelta
 
+import asyncio
 from flask import (
     Flask,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -19,7 +21,9 @@ from flask import (
     url_for,
 )
 
-from bot import config, db
+from bot import ai, config, db
+from bot.whatsapp import enviar_mensaje_wa
+from bot.main import _snapshot, _valid_transactions
 
 MONTHS_ES = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -129,6 +133,62 @@ def create_app() -> Flask:
     def logout():
         session.clear()
         return redirect(url_for("login"))
+
+    # ------------------------------------------------------------- webhook
+    def _chat_id_to_user_id(chat_id: str) -> int:
+        digits = "".join(filter(str.isdigit, str(chat_id)))
+        if digits:
+            # SQLite INTEGER supports up to 64-bit signed int
+            return int(digits) % (2**63 - 1)
+        return abs(hash(str(chat_id))) % (2**63 - 1)
+
+    @app.route('/webhook/openwa', methods=['POST'])
+    def openwa_webhook():
+        datos = request.json or {}
+        if datos.get("event") == "onMessage":
+            mensaje = datos.get("data", {})
+            chat_id = mensaje.get("from")
+            texto_recibido = mensaje.get("body")
+
+            if chat_id and texto_recibido and not mensaje.get("isGroupMsg"):
+                user_id = _chat_id_to_user_id(chat_id)
+                history = db.chat_history(user_id, config.CHAT_HISTORY_LIMIT)
+                snapshot = _snapshot(user_id)
+
+                try:
+                    result = asyncio.run(ai.chat(history, texto_recibido, snapshot))
+                except Exception as e:
+                    app.logger.error(f"Error procesando IA para OpenWA: {e}")
+                    enviar_mensaje_wa(
+                        chat_id,
+                        "Tuve un problema para responder 😓 Intenta de nuevo en un momento."
+                    )
+                    return jsonify({"status": "error"}), 500
+
+                reply = (result.get("reply") or "").strip() or "¿Me lo repites? 🙏"
+                txs = _valid_transactions(result.get("transactions"))
+                if txs:
+                    db.add_transactions(
+                        user_id,
+                        {"document_type": "chat", "merchant": None, "transactions": txs},
+                    )
+                    lines = [reply, "", "✍️ Registrado:"]
+                    for tx in txs:
+                        sign = "−" if tx.get("type") != "ingreso" else "+"
+                        amount = float(tx.get("amount") or 0)
+                        currency = (tx.get("currency") or "USD").upper()
+                        lines.append(
+                            f"• {tx.get('description', 'movimiento')}: "
+                            f"{sign}{amount:,.2f} {currency}"
+                            f" ({tx.get('category', 'otros')})"
+                        )
+                    reply = "\n".join(lines)
+
+                db.append_chat(user_id, "user", texto_recibido)
+                db.append_chat(user_id, "assistant", reply)
+                enviar_mensaje_wa(chat_id, reply)
+
+        return jsonify({"status": "recibido"}), 200
 
     # ------------------------------------------------------------- dashboard
 
