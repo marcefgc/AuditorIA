@@ -60,6 +60,10 @@ WEB_URL = os.environ.get("WEB_URL", "http://localhost:8642")
 WEB_HOST = os.environ.get("WEB_HOST", "0.0.0.0")
 WEB_PORT = int(os.environ.get("WEB_PORT", "8642"))
 
+# ------------------------------------------------------------- OpenWA WhatsApp
+OPENWA_API_URL = os.environ.get("OPENWA_API_URL", "http://localhost:8000")
+OPENWA_SESSION_KEY = os.environ.get("OPENWA_SESSION_KEY", "")
+
 
 def _check_dependencies() -> None:
     """Falla al arrancar (y no a mitad de uso) si faltan paquetes."""
